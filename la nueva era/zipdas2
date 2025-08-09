@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mapa Conceptual: Historia del Pensamiento Administrativo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            overflow: hidden;
+        }
+        #canvas {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+        }
+        #map-container {
+            position: absolute;
+            transform-origin: 0 0;
+        }
+        .node {
+            position: absolute;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent; /* Borde para selección */
+            text-align: center;
+            min-width: 160px;
+            font-size: 13px;
+            line-height: 1.4;
+            background-clip: padding-box;
+            transition: opacity 0.3s ease-in-out, border-color 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .node.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+        }
+        .node h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .node p {
+            font-size: 11px;
+            color: #4a5568;
+        }
+        .dimmed {
+            opacity: 0.2;
+        }
+        .color-main { background-color: #ffffff; }
+        .color-civilization { background-color: #fffbeb; border-left: 5px solid #f59e0b; }
+        .color-medieval { background-color: #fefce8; border-left: 5px solid #eab308; }
+        .color-renaissance { background-color: #fef3c7; border-left: 5px solid #f59e0b; }
+        .color-school { background-color: #eff6ff; border-left: 5px solid #3b82f6; }
+        .color-author { background-color: #faf5ff; border-left: 5px solid #a855f7; }
+
+        #svg-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4800px; 
+            height: 2000px;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .connector-path {
+            stroke: #94a3b8;
+            stroke-width: 2;
+            fill: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        #legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10;
+            border: 1px solid #e2e8f0;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .legend-item:hover { background-color: #f1f5f9; }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 8px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        /* --- Context Menu --- */
+        #context-menu {
+            position: absolute;
+            display: none;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            padding: 8px;
+            z-index: 100;
+        }
+        #context-menu button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        #context-menu button:hover {
+            background-color: #f1f5f9;
+        }
+
+        /* --- AI Modal --- */
+        #ai-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #ai-modal {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        #ai-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        #ai-modal-content {
+            white-space: pre-wrap;
+            font-family: 'Inter', sans-serif;
+            color: #374151;
+        }
+        #loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas">
+        <div id="map-container">
+            <!-- SVG para las líneas de conexión -->
+            <svg id="svg-container">
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                    </marker>
+                </defs>
+                
+                <!-- Conexiones Antecedentes -->
+                <path d="M 2225 850 V 620" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 550 V 450 H 1200 V 350" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 550 V 450 H 2225 V 350" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 550 V 450 H 3250 V 350" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 1200 300 H 490 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 1200 300 H 790 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 1200 300 H 1090 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 1200 300 H 1390 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 1200 300 H 1690 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 300 H 1940 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 300 H 2240 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 300 H 2540 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 2890 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 3140 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 3390 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 3640 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 3890 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3250 300 H 4140 V 200" class="connector-path" marker-end="url(#arrowhead)"></path>
+
+                <!-- Conexiones Título -> Escuelas -->
+                <path d="M 2225 920 V 1050 H 940 V 1100" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 920 V 1050 H 2140 V 1100" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 920 V 1050 H 3140 V 1100" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2225 920 V 1050 H 3940 V 1100" class="connector-path" marker-end="url(#arrowhead)"></path>
+
+                <!-- Escuela -> Autores -->
+                <path d="M 940 1170 V 1250 H 690 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 940 1170 V 1250 H 940 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 940 1170 V 1250 H 1190 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                
+                <path d="M 2140 1170 V 1250 H 1440 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 1640 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 1840 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 2040 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 2240 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 2440 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1170 V 1250 H 2640 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                
+                <path d="M 3140 1170 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                
+                <!-- Escuela Sistemas -> Abierto/Cerrado -->
+                <path d="M 3940 1170 V 1250 H 3815 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3940 1170 V 1250 H 4065 V 1300" class="connector-path" marker-end="url(#arrowhead)"></path>
+                
+                <!-- Abierto -> Autores -->
+                <path d="M 3815 1370 V 1450 H 3715 V 1500" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3815 1370 V 1450 H 3915 V 1500" class="connector-path" marker-end="url(#arrowhead)"></path>
+
+                <!-- Autores/Escuelas -> Principios -->
+                <path d="M 940 1400 V 1600" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 2140 1400 V 1600" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3140 1400 V 1600" class="connector-path" marker-end="url(#arrowhead)"></path>
+
+                <!-- Principios -> Comparación -->
+                <path d="M 940 1670 V 1720 H 2025 V 1750" class="connector-path" marker-end="url(#arrowhead)"></path>
+                <path d="M 3140 1670 V 1720 H 2025 V 1750" class="connector-path" marker-end="url(#arrowhead)"></path>
+            </svg>
+
+            <!-- Nodos del Mapa Conceptual -->
+            <div class="node color-civilization" style="top: 150px; left: 400px;"><h3>Sumerios</h3><p>Control escrito</p></div>
+            <div class="node color-civilization" style="top: 150px; left: 700px;"><h3>Egipcios</h3><p>Planificación</p></div>
+            <div class="node color-civilization" style="top: 150px; left: 1000px;"><h3>Babilonios</h3><p>Código legal</p></div>
+            <div class="node color-civilization" style="top: 150px; left: 1300px;"><h3>Hebreos</h3><p>Delegación</p></div>
+            <div class="node color-civilization" style="top: 150px; left: 1600px;"><h3>Griegos</h3><p>Universalidad</p></div>
+            <div class="node color-main" style="top: 300px; left: 900px; width: 600px;"><h3>Civilizaciones Antiguas</h3></div>
+            
+            <div class="node color-medieval" style="top: 150px; left: 1850px;"><h3>Maquiavelo</h3><p>Realismo político</p></div>
+            <div class="node color-medieval" style="top: 150px; left: 2150px;"><h3>Tomás Moro</h3><p>Crítica social</p></div>
+            <div class="node color-medieval" style="top: 150px; left: 2450px;"><h3>Arsenal de Venecia</h3><p>Línea de ensamblaje</p></div>
+            <div class="node color-main" style="top: 300px; left: 2125px; width: 200px;"><h3>Periodo Medieval</h3></div>
+            
+            <div class="node color-renaissance" style="top: 150px; left: 2800px;"><h3>Sistema Doméstico</h3></div>
+            <div class="node color-renaissance" style="top: 150px; left: 3050px;"><h3>Trabajo a Domicilio</h3></div>
+            <div class="node color-renaissance" style="top: 150px; left: 3300px;"><h3>Sistema Fabril</h3></div>
+            <div class="node color-renaissance" style="top: 150px; left: 3550px;"><h3>Steuart</h3><p>Anticipa Div. Trabajo</p></div>
+            <div class="node color-renaissance" style="top: 150px; left: 3800px;"><h3>Smith</h3><p>División del Trabajo</p></div>
+            <div class="node color-renaissance" style="top: 150px; left: 4050px;"><h3>Fundación Soho</h3><p>Adm. Científica</p></div>
+            <div class="node color-main" style="top: 300px; left: 3150px; width: 200px;"><h3>Renacimiento</h3></div>
+
+            <div class="node color-main" style="top: 550px; left: 2100px; width: 250px;"><h3>Antecedentes Históricos</h3></div>
+
+            <div class="node color-main" style="top: 850px; left: 2100px; width: 250px;"><h3>Historia del Pensamiento Administrativo</h3></div>
+
+            <div class="node color-school" data-category="school" style="top: 1100px; left: 800px; width: 280px;"><h3>Escuela Clásica y Científica</h3></div>
+            <div class="node color-school" data-category="school" style="top: 1100px; left: 2000px; width: 280px;"><h3>Relaciones Humanas</h3></div>
+            <div class="node color-school" data-category="school" style="top: 1100px; left: 3050px; width: 200px;"><h3>Estructuralista</h3></div>
+            <div class="node color-school" data-category="school" style="top: 1100px; left: 3850px; width: 200px;"><h3>Sistemas</h3></div>
+
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 600px;"><h3>Taylor</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 850px;"><h3>Gilbreth</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 1100px;"><h3>Fayol</h3></div>
+
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 1350px;"><h3>Mayo</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 1550px;"><h3>Follett</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 1750px;"><h3>Maslow</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 1950px;"><h3>McGregor</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 2150px;"><h3>Herzberg</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 2350px;"><h3>Sheldon</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 2550px;"><h3>Likert</h3></div>
+
+            <div class="node color-author" data-category="author" style="top: 1300px; left: 3050px;"><h3>Weber</h3></div>
+
+            <div class="node color-main" style="top: 1300px; left: 3725px;"><h3>Abierto</h3></div>
+            <div class="node color-main" style="top: 1300px; left: 3975px;"><h3>Cerrado</h3></div>
+
+            <div class="node color-author" data-category="author" style="top: 1500px; left: 3625px;"><h3>Katz & Kahn</h3></div>
+            <div class="node color-author" data-category="author" style="top: 1500px; left: 3825px; width: 200px"><h3>Kast & Rosenzweig</h3></div>
+
+            <div class="node color-main" style="top: 1600px; left: 800px; width: 280px;"><h3>Principios y Procesos</h3><p>Eficiencia, 14 Principios, Tiempos y Movimientos</p></div>
+            <div class="node color-main" style="top: 1600px; left: 2000px; width: 280px;"><h3>Teorías del Comportamiento</h3><p>Necesidades, Motivación</p></div>
+            <div class="node color-main" style="top: 1600px; left: 3050px; width: 200px;"><h3>Modelo de Burocracia</h3><p>Jerarquía, Reglas</p></div>
+
+            <div class="node color-main" style="top: 1750px; left: 1900px; width: 250px;"><h3>Enfoque de Sistema Cerrado</h3><p>Determinista, mecanicista</p></div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu">
+        <button data-action="semejanzas">Semejanzas</button>
+        <button data-action="diferencias">Diferencias</button>
+    </div>
+
+    <!-- AI Modal -->
+    <div id="ai-modal-overlay">
+        <div id="ai-modal">
+            <button id="ai-modal-close">&times;</button>
+            <div id="ai-modal-content"></div>
+        </div>
+    </div>
+
+    <div id="legend">
+        <h4>Leyenda de Colores</h4>
+        <div class="legend-item" data-category-toggle="school">
+            <div class="legend-color" style="background-color: #eff6ff; border: 1px solid #3b82f6;"></div>
+            <span>Escuela de Pensamiento</span>
+        </div>
+        <div class="legend-item" data-category-toggle="author">
+            <div class="legend-color" style="background-color: #faf5ff; border: 1px solid #a855f7;"></div>
+            <span>Autores</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const mapContainer = document.getElementById('map-container');
+        let scale = 0.4;
+        let panning = false;
+        let pointX = 0;
+        let pointY = 0;
+        let start = { x: 0, y: 0 };
+        let initialPinchDistance = 0;
+
+        function updateTransform() {
+            mapContainer.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+        }
+
+        // Mouse Events
+        canvas.onmousedown = function (e) {
+            if (e.target.id !== 'canvas') return;
+            e.preventDefault();
+            start = { x: e.clientX - pointX, y: e.clientY - pointY };
+            panning = true;
+            canvas.style.cursor = 'grabbing';
+        };
+
+        canvas.onmouseup = function () {
+            panning = false;
+            canvas.style.cursor = 'grab';
+        };
+        
+        canvas.onmouseleave = function () {
+            panning = false;
+            canvas.style.cursor = 'grab';
+        };
+
+        canvas.onmousemove = function (e) {
+            if (!panning) return;
+            e.preventDefault();
+            pointX = (e.clientX - start.x);
+            pointY = (e.clientY - start.y);
+            updateTransform();
+        };
+
+        canvas.onwheel = function (e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            zoomAtPoint(mouseX, mouseY, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+        };
+
+        // Touch Events
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.target.id !== 'canvas') return;
+            e.preventDefault();
+            if (e.touches.length === 1) { // Pan
+                start = { x: e.touches[0].clientX - pointX, y: e.touches[0].clientY - pointY };
+                panning = true;
+            } else if (e.touches.length === 2) { // Zoom
+                panning = false;
+                initialPinchDistance = getPinchDistance(e);
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            panning = false;
+            initialPinchDistance = 0;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (panning && e.touches.length === 1) { // Pan
+                pointX = e.touches[0].clientX - start.x;
+                pointY = e.touches[0].clientY - start.y;
+                updateTransform();
+            } else if (e.touches.length === 2) { // Zoom
+                const newPinchDistance = getPinchDistance(e);
+                if (initialPinchDistance <= 0) return;
+                
+                const zoomFactor = newPinchDistance / initialPinchDistance;
+                const midPoint = getPinchMidpoint(e);
+                zoomAtPoint(midPoint.x, midPoint.y, zoomFactor);
+                
+                initialPinchDistance = newPinchDistance;
+            }
+        });
+
+        function getPinchDistance(e) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getPinchMidpoint(e) {
+             const rect = canvas.getBoundingClientRect();
+             return {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+             };
+        }
+
+        function zoomAtPoint(x, y, factor) {
+            const mapX = (x - pointX) / scale;
+            const mapY = (y - pointY) / scale;
+            
+            const newScale = scale * factor;
+            scale = Math.min(Math.max(0.2, newScale), 2);
+
+            pointX = x - mapX * scale;
+            pointY = y - mapY * scale;
+            updateTransform();
+        }
+
+        // Highlighting Logic
+        const legend = document.getElementById('legend');
+        const allNodes = document.querySelectorAll('.node');
+        const allPaths = document.querySelectorAll('.connector-path');
+        let activeFilter = null;
+
+        function applyFilter(category) {
+            activeFilter = category;
+            allNodes.forEach(node => {
+                const nodeCategory = node.dataset.category;
+                if (nodeCategory === category) {
+                    node.classList.remove('dimmed');
+                } else {
+                    node.classList.add('dimmed');
+                }
+            });
+            allPaths.forEach(path => path.style.opacity = '0.2');
+        }
+
+        function resetFilter() {
+            activeFilter = null;
+            allNodes.forEach(node => node.classList.remove('dimmed'));
+            allPaths.forEach(path => path.style.opacity = '1');
+        }
+
+        legend.addEventListener('click', (e) => {
+            const toggleItem = e.target.closest('.legend-item');
+            if (!toggleItem) return;
+            const category = toggleItem.dataset.categoryToggle;
+            if (activeFilter === category) {
+                resetFilter();
+            } else {
+                applyFilter(category);
+            }
+        });
+
+        // --- AI Comparison Logic ---
+        const contextMenu = document.getElementById('context-menu');
+        const aiModalOverlay = document.getElementById('ai-modal-overlay');
+        const aiModalContent = document.getElementById('ai-modal-content');
+        const aiModalClose = document.getElementById('ai-modal-close');
+        let selectedNodes = [];
+
+        function handleNodeClick(event) {
+            const node = event.currentTarget;
+            const isSelected = node.classList.contains('selected');
+
+            if (!event.ctrlKey && !event.metaKey) {
+                clearSelection();
+                node.classList.add('selected');
+                selectedNodes.push(node);
+            } else {
+                if (isSelected) {
+                    node.classList.remove('selected');
+                    selectedNodes = selectedNodes.filter(n => n !== node);
+                } else if (selectedNodes.length < 2) {
+                    node.classList.add('selected');
+                    selectedNodes.push(node);
+                }
+            }
+
+            if (selectedNodes.length === 2) {
+                showContextMenu(event);
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        }
+        
+        allNodes.forEach(node => node.addEventListener('click', handleNodeClick));
+
+        function clearSelection() {
+            selectedNodes.forEach(n => n.classList.remove('selected'));
+            selectedNodes = [];
+            contextMenu.style.display = 'none';
+        }
+
+        function showContextMenu(event) {
+            const rect1 = selectedNodes[0].getBoundingClientRect();
+            const rect2 = selectedNodes[1].getBoundingClientRect();
+            
+            const top = (rect1.top + rect2.bottom) / 2 + window.scrollY;
+            const left = (rect1.right + rect2.left) / 2 + window.scrollX;
+
+            contextMenu.style.top = `${top}px`;
+            contextMenu.style.left = `${left}px`;
+            contextMenu.style.display = 'block';
+        }
+
+        contextMenu.addEventListener('click', async (e) => {
+            const action = e.target.dataset.action;
+            if (!action) return;
+
+            contextMenu.style.display = 'none';
+            aiModalOverlay.style.display = 'flex';
+            aiModalContent.innerHTML = '<div id="loader"></div>';
+
+            const node1Data = {
+                title: selectedNodes[0].querySelector('h3').textContent,
+                description: selectedNodes[0].querySelector('p')?.textContent || ''
+            };
+            const node2Data = {
+                title: selectedNodes[1].querySelector('h3').textContent,
+                description: selectedNodes[1].querySelector('p')?.textContent || ''
+            };
+            
+           // ... dentro de contextMenu.addEventListener('click', async (e) => {
+
+const prompt = `Como experto en historia del pensamiento administrativo...`;
+
+try {
+    // El payload ahora solo contiene el prompt, que enviaremos a nuestro intermediario.
+    const payload = { prompt: prompt }; 
+
+    // Llamamos a nuestra propia función en el backend.
+    // La ruta '/api/llamar-ia' es una convención en Vercel.
+    const response = await fetch('/api/llamar-ia', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload) // Enviamos el prompt en el cuerpo de la solicitud
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error del servidor intermediario: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    // La respuesta de nuestro intermediario ya contendrá el texto de la IA.
+    const text = result.text; 
+    aiModalContent.textContent = text;
+} catch (error) {
+// ... resto del código
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates[0].content.parts[0].text;
+                aiModalContent.textContent = text;
+            } catch (error) {
+                console.error("Error fetching AI response:", error);
+                aiModalContent.textContent = "Lo siento, ha ocurrido un error al generar la comparación. Por favor, inténtalo de nuevo.";
+            }
+        });
+
+        aiModalClose.addEventListener('click', () => {
+            aiModalOverlay.style.display = 'none';
+            clearSelection();
+        });
+
+        canvas.addEventListener('click', (e) => {
+             if (e.target.id === 'canvas') {
+                resetFilter();
+                clearSelection();
+            }
+        });
+
+        function centerMap() {
+            const canvasWidth = canvas.clientWidth;
+            const canvasHeight = canvas.clientHeight;
+            const mapWidth = 4800;
+            const mapHeight = 2000;
+            pointX = (canvasWidth / 2) - (mapWidth / 2 * scale);
+            pointY = (canvasHeight / 2) - (mapHeight / 2 * scale);
+            updateTransform();
+        }
+
+        window.onload = centerMap;
+        window.onresize = centerMap;
+
+    </script>
+
+<script src="https://static.app/js/static.js" type="text/javascript"></script>
+</body>
+</html>
