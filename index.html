@@ -557,25 +557,23 @@
             const prompt = `Como experto en historia del pensamiento administrativo y basándote en el documento "Resumen de Textos - 1er Parcial Organización.pdf", explica las ${action} entre "${node1Data.title}: ${node1Data.description}" y "${node2Data.title}: ${node2Data.description}". Responde de manera extremadamente resumida, en no más de tres puntos clave o dos oraciones.`;
 
             try {
-    // Preparamos solo el prompt para enviarlo a nuestro intermediario
-    const payload = { prompt: prompt }; 
+                const payload = { prompt: prompt }; 
+                // This now calls your server-side script
+                const response = await fetch('/api/llamar-ia', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload) 
+                });
 
-    // Llamamos a nuestra propia función '/api/llamar-ia'
-    const response = await fetch('/api/llamar-ia', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload) 
-    });
+                if (!response.ok) {
+                    throw new Error(`Error del servidor intermediario: ${response.statusText}`);
+                }
 
-    if (!response.ok) {
-        throw new Error(`Error del servidor intermediario: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    // La respuesta ya viene procesada desde nuestro intermediario
-    const text = result.text; 
-    aiModalContent.textContent = text;
-} catch (error) {
+                const result = await response.json();
+                // The response from your server should have a 'text' property
+                const text = result.text; 
+                aiModalContent.textContent = text;
+            } catch (error) {
                 console.error("Error fetching AI response:", error);
                 aiModalContent.textContent = "Lo siento, ha ocurrido un error al generar la comparación. Por favor, inténtalo de nuevo.";
             }
@@ -609,3 +607,9 @@
     </script>
 </body>
 </html>
+
+
+    </script>
+</body>
+</html>
+
