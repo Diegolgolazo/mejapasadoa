@@ -57,4 +57,5 @@ export default async function handler(req, res) {
         console.error("Error en la función serverless:", error);
         res.status(500).json({ error: "Lo siento, ha ocurrido un error al generar la comparación." });
     }
+
 }
