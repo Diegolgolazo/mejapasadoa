@@ -501,25 +501,16 @@
             const node = event.currentTarget;
             const isSelected = node.classList.contains('selected');
 
-            if (event.ctrlKey || event.metaKey) {
-                 if (isSelected) {
-                    node.classList.remove('selected');
-                    selectedNodes = selectedNodes.filter(n => n !== node);
-                } else if (selectedNodes.length < 2) {
-                    node.classList.add('selected');
-                    selectedNodes.push(node);
-                }
+            if (isSelected) {
+                node.classList.remove('selected');
+                selectedNodes = selectedNodes.filter(n => n !== node);
             } else {
-                clearSelection();
-                if (selectedNodes.length < 2) {
-                    node.classList.add('selected');
-                    selectedNodes.push(node);
-                } else {
+                if (selectedNodes.length >= 2) {
                     selectedNodes[0].classList.remove('selected');
                     selectedNodes.shift();
-                    node.classList.add('selected');
-                    selectedNodes.push(node);
                 }
+                node.classList.add('selected');
+                selectedNodes.push(node);
             }
 
             if (selectedNodes.length === 2) {
@@ -617,7 +608,6 @@
     </script>
 </body>
 </html>
-
 
 
 
