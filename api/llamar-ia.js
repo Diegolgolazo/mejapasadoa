@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       model: "gpt-5-nano",
       messages: [{ role: "user", content: prompt }],
       // temperature eliminado porque gpt-5-nano no soporta valores distintos al por defecto
-      max_completion_tokens: 150
+      max_completion_tokens: 15000
     };
 
     const apiResponse = await fetch(apiUrl, {
@@ -38,4 +38,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
 
