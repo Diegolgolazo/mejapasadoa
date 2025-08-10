@@ -501,19 +501,25 @@
             const node = event.currentTarget;
             const isSelected = node.classList.contains('selected');
 
-            if (selectedNodes.includes(node)) {
-                // Deselect node
-                node.classList.remove('selected');
-                selectedNodes = selectedNodes.filter(n => n !== node);
-            } else if (selectedNodes.length < 2) {
-                // Select node
-                node.classList.add('selected');
-                selectedNodes.push(node);
+            if (event.ctrlKey || event.metaKey) {
+                 if (isSelected) {
+                    node.classList.remove('selected');
+                    selectedNodes = selectedNodes.filter(n => n !== node);
+                } else if (selectedNodes.length < 2) {
+                    node.classList.add('selected');
+                    selectedNodes.push(node);
+                }
             } else {
-                // Replace the last selected node
-                selectedNodes[1].classList.remove('selected');
-                selectedNodes[1] = node;
-                node.classList.add('selected');
+                clearSelection();
+                if (selectedNodes.length < 2) {
+                    node.classList.add('selected');
+                    selectedNodes.push(node);
+                } else {
+                    selectedNodes[0].classList.remove('selected');
+                    selectedNodes.shift();
+                    node.classList.add('selected');
+                    selectedNodes.push(node);
+                }
             }
 
             if (selectedNodes.length === 2) {
@@ -563,41 +569,23 @@
             const prompt = `Como experto en historia del pensamiento administrativo y basándote en el documento "Resumen de Textos - 1er Parcial Organización.pdf", explica las ${action} entre "${node1Data.title}: ${node1Data.description}" y "${node2Data.title}: ${node2Data.description}". Responde de manera extremadamente resumida, en no más de tres puntos clave o dos oraciones.`;
 
             try {
-                // --- INICIO DEL CÓDIGO CORREGIDO ---
-                // ⚠️ ¡IMPORTANTE! Reemplaza "TU_API_KEY_DE_OPENAI" con tu clave real.
-                const apiKey = "TU_API_KEY_DE_OPENAI"; 
-                const apiUrl = 'https://api.openai.com/v1/chat/completions';
-
-                const payload = {
-                    model: "gpt-5-nano", // O el modelo que uses
-                    messages: [{ role: "user", content: prompt }],
-                    // CORRECCIÓN: Se cambia 'max_tokens' por 'max_completion_tokens'
-                    max_completion_tokens: 150 
-                };
-
-                const response = await fetch(apiUrl, {
+                const payload = { prompt: prompt };
+                const response = await fetch('/api/llamar-ia', { 
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify(payload)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload) 
                 });
 
                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    console.error('Error de la API de OpenAI:', errorBody);
-                    throw new Error(`Error de la API de OpenAI: ${errorBody.error.message}`);
+                    throw new Error(`Error del servidor intermediario: ${response.statusText}`);
                 }
 
                 const result = await response.json();
-                const text = result.choices[0].message.content.trim();
+                const text = result.text; 
                 aiModalContent.textContent = text;
-                // --- FIN DEL CÓDIGO CORREGIDO ---
-
             } catch (error) {
-                console.error("Error al llamar a la IA:", error);
-                aiModalContent.textContent = "Lo siento, ha ocurrido un error al generar la comparación. Por favor, revisa la consola para más detalles.";
+                console.error("Error fetching AI response:", error);
+                aiModalContent.textContent = "Lo siento, ha ocurrido un error al generar la comparación. Por favor, inténtalo de nuevo.";
             }
         });
 
@@ -629,6 +617,7 @@
     </script>
 </body>
 </html>
+
 
 
 
