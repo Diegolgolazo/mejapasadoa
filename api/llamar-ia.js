@@ -4,15 +4,13 @@ export default async function handler(req, res) {
   try {
     const { prompt } = req.body;
     const apiKey = process.env.OPENAI_API_KEY;
-
     if (!apiKey) return res.status(500).json({ error: 'API key not found on server' });
 
     const apiUrl = 'https://api.openai.com/v1/chat/completions';
-
     const payload = {
       model: "gpt-5-nano",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
+      // temperature eliminado porque gpt-5-nano no soporta valores distintos al por defecto
       max_completion_tokens: 150
     };
 
@@ -40,3 +38,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
